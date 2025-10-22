@@ -107,9 +107,6 @@ const SQLRewriter = {
         const rightObj = condition.right;
         const operator = condition.operator;
 
-        console.log('[formatCondition] Operator:', operator);
-        console.log('[formatCondition] Right object:', rightObj);
-
         // Handle different types of right-hand side values
         if (rightObj?.type === 'column') {
             // It's a column reference
@@ -122,12 +119,9 @@ const SQLRewriter = {
                    rightObj?.type === 'number') {
             // It's a literal value
             // For IN/NOT IN operators, preserve the list format with parentheses
-            console.log('[formatCondition] Calling formatValue with:', rightObj.value, 'operator:', operator);
             right = this.formatValue(rightObj.value, operator);
-            console.log('[formatCondition] Formatted right side:', right);
         } else if (rightObj?.value !== undefined) {
             // Fallback: has a value property
-            console.log('[formatCondition] Using fallback, calling formatValue with:', rightObj.value);
             right = this.formatValue(rightObj.value, operator);
         } else if (rightObj?.type === 'function') {
             // It's a function call - stringify it
@@ -140,9 +134,7 @@ const SQLRewriter = {
         const table = condition.left?.table || '';
         const tablePrefix = table ? `${table}.` : '';
 
-        const result = `${tablePrefix}${left} ${operator} ${right}`;
-        console.log('[formatCondition] Final result:', result);
-        return result;
+        return `${tablePrefix}${left} ${operator} ${right}`;
     },
 
     // Format value with proper quoting

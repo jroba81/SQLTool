@@ -483,9 +483,6 @@ function displayRewriterSection(result) {
                 // Escape the condition for HTML attribute storage
                 const escapedCondition = item.condition.replace(/"/g, '&quot;');
 
-                console.log(`Condition #${index} for ${tableName}:`, item.condition);
-                console.log(`Escaped condition:`, escapedCondition);
-
                 html += `
                     <div class="condition-option">
                         <input type="checkbox" id="${checkboxId}" data-table="${tableName}" data-condition="${escapedCondition}">
@@ -529,17 +526,11 @@ function handlePreviewRewrite() {
         const table = checkbox.dataset.table;
         const condition = checkbox.dataset.condition;
 
-        console.log(`Retrieved condition from checkbox for ${table}:`, condition);
-        console.log(`Condition type:`, typeof condition);
-
         if (!selectedConditions[table]) {
             selectedConditions[table] = [];
         }
         selectedConditions[table].push(condition);
     });
-
-    console.log('Selected conditions:', selectedConditions);
-    console.log('Statements to rewrite:', currentStatementsWithIds.length);
 
     // Rewrite statements
     const rewrittenStatements = currentStatementsWithIds.map((item, index) => {
@@ -554,7 +545,8 @@ function handlePreviewRewrite() {
             return {
                 id: item.id,
                 original: originalSql,
-                rewritten: originalSql
+                rewritten: originalSql,
+                changed: false
             };
         }
 
@@ -613,39 +605,74 @@ function handlePreviewRewrite() {
         return {
             id: item.id,
             original: originalSql,
-            rewritten: newSql
+            rewritten: newSql,
+            changed: originalSql !== newSql
         };
     });
 
+    // Filter to only show changed statements
+    const changedStatements = rewrittenStatements.filter(stmt => stmt.changed);
+
+    if (changedStatements.length === 0) {
+        showStatus(rewriteStatus, 'warning', 'No statements will be changed. The selected conditions may already exist in all statements.');
+        return;
+    }
+
     // Display preview
-    displayPreview(rewrittenStatements);
+    displayPreview(changedStatements, rewrittenStatements.length);
 
     // Show apply/cancel buttons
     applyRewriteBtn.style.display = 'inline-block';
     cancelRewriteBtn.style.display = 'inline-block';
     previewSection.style.display = 'block';
-
-    showStatus(rewriteStatus, 'info', 'Preview generated. Review and click "Apply Changes" to update the database.');
 }
 
 // Display preview
-function displayPreview(rewrittenStatements) {
+function displayPreview(rewrittenStatements, totalStatements) {
     const beforeTextarea = document.querySelector('#preview-before textarea');
     const afterTextarea = document.querySelector('#preview-after textarea');
 
+    // Format SQL statements for better readability
     const beforeText = rewrittenStatements.map((item, i) =>
-        `-- Statement ${i + 1} (ID: ${item.id})\n${item.original}`
+        `-- Statement ${i + 1} of ${rewrittenStatements.length} (ID: ${item.id})\n${formatSql(item.original)}`
     ).join('\n\n---\n\n');
 
     const afterText = rewrittenStatements.map((item, i) =>
-        `-- Statement ${i + 1} (ID: ${item.id})\n${item.rewritten}`
+        `-- Statement ${i + 1} of ${rewrittenStatements.length} (ID: ${item.id})\n${formatSql(item.rewritten)}`
     ).join('\n\n---\n\n');
 
     beforeTextarea.value = beforeText;
     afterTextarea.value = afterText;
 
-    // Store for later use
+    // Store all statements (including unchanged) for later use
     window.rewrittenStatements = rewrittenStatements;
+
+    // Update status message
+    if (totalStatements) {
+        showStatus(rewriteStatus, 'info',
+            `Showing ${rewrittenStatements.length} statement(s) that will be changed out of ${totalStatements} total. Review and click "Apply Changes" to update.`);
+    }
+}
+
+// Format SQL for better readability
+function formatSql(sql) {
+    if (!sql) return '';
+
+    let formatted = sql;
+
+    // Add line breaks before major SQL keywords
+    formatted = formatted.replace(/\s+(SELECT|FROM|WHERE|INNER JOIN|LEFT JOIN|RIGHT JOIN|JOIN|GROUP BY|ORDER BY|HAVING)\s+/gi, '\n$1 ');
+
+    // Add line breaks and indentation for AND/OR in WHERE clauses
+    formatted = formatted.replace(/\s+(AND|OR)\s+/gi, '\n  $1 ');
+
+    // Clean up multiple consecutive line breaks
+    formatted = formatted.replace(/\n\n+/g, '\n');
+
+    // Trim each line
+    formatted = formatted.split('\n').map(line => line.trim()).join('\n');
+
+    return formatted;
 }
 
 // Handle apply rewrite
