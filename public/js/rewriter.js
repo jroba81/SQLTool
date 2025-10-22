@@ -162,21 +162,16 @@ const SQLRewriter = {
             }
         }
 
-        // If it's a number, return as-is
+        // If it's a number type, return as-is
         if (typeof value === 'number') {
             return value;
         }
 
-        // If it's a string, check if it's actually a number
+        // If it's a string, quote it with single quotes (SQL standard)
+        // We do NOT try to detect numeric strings - preserve them as strings
+        // because the column might be VARCHAR (e.g., a.RC <> '21')
         if (typeof value === 'string') {
-            // Check if the string represents a number (integer or decimal)
-            const numericValue = value.trim();
-            if (/^-?\d+(\.\d+)?$/.test(numericValue)) {
-                // It's a numeric string, return without quotes
-                return numericValue;
-            }
-
-            // It's a regular string, quote it with single quotes (SQL standard)
+            // Escape any single quotes in the value
             const escaped = value.replace(/'/g, "''");
             return `'${escaped}'`;
         }
