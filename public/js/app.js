@@ -529,9 +529,20 @@ function handlePreviewRewrite() {
                         return condition.replace(new RegExp(`^${conditionAlias}\\.`), `${aliasInStatement}.`);
                     }
                     return condition;
+                }).filter(condition => {
+                    // Filter out conditions that already exist in the statement
+                    // Normalize whitespace for comparison
+                    const normalizedCondition = condition.replace(/\s+/g, ' ').trim();
+                    const normalizedSql = originalSql.replace(/\s+/g, ' ');
+
+                    // Check if this exact condition already exists
+                    return !normalizedSql.includes(normalizedCondition);
                 });
 
-                newSql = SQLRewriter.rewriteStatement(newSql, mappedConditions);
+                // Only apply if there are new conditions to add
+                if (mappedConditions.length > 0) {
+                    newSql = SQLRewriter.rewriteStatement(newSql, mappedConditions);
+                }
             }
         });
 
