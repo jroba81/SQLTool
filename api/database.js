@@ -174,7 +174,7 @@ router.post('/parse', async (req, res) => {
         const sql = statements[i];
 
         // Parse the SQL statement with appropriate dialect
-        const dialect = dbType === 'mssql' ? 'Transact-SQL' : 'MySQL';
+        const dialect = dbType === 'mssql' ? 'MSSQL' : 'MySQL';
         const ast = parser.astify(sql, { database: dialect });
 
         // Extract information based on statement type
