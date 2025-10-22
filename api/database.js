@@ -573,14 +573,27 @@ router.post('/update-statements', async (req, res) => {
 // Get statements with IDs for updating
 router.post('/statements-with-ids', async (req, res) => {
   try {
+    console.log('statements-with-ids endpoint called');
+    console.log('Request body:', req.body);
     const { tableName, columnName } = req.body;
 
+    if (!tableName || !columnName) {
+      console.log('Missing tableName or columnName');
+      return res.status(400).json({
+        success: false,
+        error: 'tableName and columnName are required'
+      });
+    }
+
     if (!dbConnection) {
+      console.log('No database connection');
       return res.status(400).json({
         success: false,
         error: 'Not connected to database'
       });
     }
+
+    console.log(`Fetching statements from ${tableName}.${columnName} (db type: ${dbType})`);
 
     let rows;
     let idColumn = 'id';
@@ -640,14 +653,19 @@ router.post('/statements-with-ids', async (req, res) => {
         statement: row[columnName]
       }));
 
-    res.json({
+    console.log(`Successfully fetched ${statements.length} statements with ID column: ${idColumn}`);
+
+    const response = {
       success: true,
       statements: statements,
       count: statements.length,
       idColumn: idColumn
-    });
+    };
+
+    res.json(response);
   } catch (error) {
-    console.error('Error fetching statements:', error);
+    console.error('Error fetching statements with IDs:', error);
+    console.error('Stack trace:', error.stack);
     res.status(500).json({
       success: false,
       error: error.message

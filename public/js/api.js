@@ -86,6 +86,10 @@ const API = {
     // Get SQL statements with IDs
     async getStatementsWithIds(tableName, columnName) {
         try {
+            console.log('[API.getStatementsWithIds] Starting fetch...');
+            console.log('[API.getStatementsWithIds] URL:', `${this.baseUrl}/statements-with-ids`);
+            console.log('[API.getStatementsWithIds] Body:', { tableName, columnName });
+
             const response = await fetch(`${this.baseUrl}/statements-with-ids`, {
                 method: 'POST',
                 headers: {
@@ -94,10 +98,24 @@ const API = {
                 body: JSON.stringify({ tableName, columnName })
             });
 
+            console.log('[API.getStatementsWithIds] Response status:', response.status);
+            console.log('[API.getStatementsWithIds] Response ok:', response.ok);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[API.getStatementsWithIds] Response not OK:', errorText);
+                return {
+                    success: false,
+                    error: `HTTP ${response.status}: ${errorText}`
+                };
+            }
+
             const data = await response.json();
+            console.log('[API.getStatementsWithIds] Parsed response data:', data);
             return data;
         } catch (error) {
-            console.error('Error fetching statements with IDs:', error);
+            console.error('[API.getStatementsWithIds] Exception:', error);
+            console.error('[API.getStatementsWithIds] Error stack:', error.stack);
             return {
                 success: false,
                 error: error.message

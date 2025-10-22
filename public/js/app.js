@@ -203,24 +203,39 @@ async function fetchStatementsWithIds() {
     const tableName = sourceTableSelect.value;
     const columnName = document.getElementById('column-name').value;
 
-    console.log('Fetching statements with IDs for table:', tableName, 'column:', columnName);
+    console.log('[fetchStatementsWithIds] Starting...');
+    console.log('[fetchStatementsWithIds] Table:', tableName, 'Column:', columnName);
+
+    if (!tableName || !columnName) {
+        console.error('[fetchStatementsWithIds] Missing table or column name');
+        showStatus(rewriteStatus, 'error', 'Missing table or column name');
+        return;
+    }
 
     try {
+        console.log('[fetchStatementsWithIds] Calling API...');
         const result = await API.getStatementsWithIds(tableName, columnName);
 
-        console.log('getStatementsWithIds result:', result);
+        console.log('[fetchStatementsWithIds] API response:', result);
+        console.log('[fetchStatementsWithIds] Result type:', typeof result);
+        console.log('[fetchStatementsWithIds] Result keys:', Object.keys(result || {}));
 
-        if (result.success) {
-            currentStatementsWithIds = result.statements;
+        if (result && result.success) {
+            currentStatementsWithIds = result.statements || [];
             currentIdColumn = result.idColumn || 'id';
-            console.log('Loaded', currentStatementsWithIds.length, 'statements with IDs');
+            console.log('[fetchStatementsWithIds] SUCCESS: Loaded', currentStatementsWithIds.length, 'statements');
+            console.log('[fetchStatementsWithIds] ID column:', currentIdColumn);
         } else {
-            console.error('Failed to fetch statements with IDs:', result.error);
-            showStatus(parseStatus, 'error', `Could not load statements for rewriter: ${result.error}`);
+            console.error('[fetchStatementsWithIds] FAILED:', result?.error || 'Unknown error');
+            console.error('[fetchStatementsWithIds] Full result:', JSON.stringify(result));
+            showStatus(rewriteStatus, 'error', `Could not load statements: ${result?.error || 'Unknown error'}`);
+            currentStatementsWithIds = [];
         }
     } catch (error) {
-        console.error('Exception fetching statements with IDs:', error);
-        showStatus(parseStatus, 'error', 'Failed to load statements for rewriter');
+        console.error('[fetchStatementsWithIds] EXCEPTION:', error);
+        console.error('[fetchStatementsWithIds] Error stack:', error.stack);
+        showStatus(rewriteStatus, 'error', `Exception loading statements: ${error.message}`);
+        currentStatementsWithIds = [];
     }
 }
 
