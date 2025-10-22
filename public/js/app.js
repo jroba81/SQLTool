@@ -3,6 +3,7 @@ let currentStatements = [];
 let currentStatementsWithIds = [];
 let parsedResult = null;
 let selectedConditions = {};
+let currentIdColumn = 'id';
 
 // DOM elements
 const connectBtn = document.getElementById('connect-btn');
@@ -206,6 +207,7 @@ async function fetchStatementsWithIds() {
 
     if (result.success) {
         currentStatementsWithIds = result.statements;
+        currentIdColumn = result.idColumn || 'id';
     }
 }
 
@@ -619,7 +621,7 @@ async function handleApplyRewrite() {
         newStatement: item.rewritten
     }));
 
-    const result = await API.updateStatements(tableName, columnName, updates);
+    const result = await API.updateStatements(tableName, columnName, updates, currentIdColumn);
 
     applyRewriteBtn.disabled = false;
     applyRewriteBtn.innerHTML = 'Apply Changes to Database';

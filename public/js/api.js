@@ -106,14 +106,14 @@ const API = {
     },
 
     // Update SQL statements
-    async updateStatements(tableName, columnName, updates) {
+    async updateStatements(tableName, columnName, updates, idColumn) {
         try {
             const response = await fetch(`${this.baseUrl}/update-statements`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ tableName, columnName, updates })
+                body: JSON.stringify({ tableName, columnName, updates, idColumn })
             });
 
             const data = await response.json();

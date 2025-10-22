@@ -173,9 +173,9 @@ router.post('/parse', async (req, res) => {
       try {
         const sql = statements[i];
 
-        // Parse the SQL statement with appropriate dialect
-        const dialect = dbType === 'mssql' ? 'MSSQL' : 'MySQL';
-        const ast = parser.astify(sql, { database: dialect });
+        // Parse the SQL statement
+        // Note: Use MySQL parser for both as INSERT syntax is similar and MSSQL not fully supported
+        const ast = parser.astify(sql, { database: 'MySQL' });
 
         // Extract information based on statement type
         const statementInfo = extractStatementInfo(ast, sql);
@@ -400,7 +400,7 @@ function extractCondition(condition) {
 // Update SQL statements in database
 router.post('/update-statements', async (req, res) => {
   try {
-    const { tableName, columnName, updates } = req.body;
+    const { tableName, columnName, updates, idColumn } = req.body;
 
     if (!dbConnection) {
       return res.status(400).json({
@@ -416,6 +416,9 @@ router.post('/update-statements', async (req, res) => {
       });
     }
 
+    // Use provided idColumn or default to 'id'
+    const idCol = idColumn || 'id';
+
     // Update each statement
     let updateCount = 0;
     const errors = [];
@@ -426,11 +429,11 @@ router.post('/update-statements', async (req, res) => {
 
         if (dbType === 'mysql') {
           // Build update query with parameterized values for security
-          const query = `UPDATE ${tableName} SET ${columnName} = ? WHERE id = ?`;
+          const query = `UPDATE ${tableName} SET ${columnName} = ? WHERE ${idCol} = ?`;
           await dbConnection.execute(query, [newStatement, id]);
         } else if (dbType === 'mssql') {
           // SQL Server uses @param syntax
-          const query = `UPDATE ${tableName} SET ${columnName} = @newStatement WHERE id = @id`;
+          const query = `UPDATE ${tableName} SET ${columnName} = @newStatement WHERE ${idCol} = @id`;
           await mssqlPool.request()
             .input('newStatement', mssql.NVarChar, newStatement)
             .input('id', mssql.Int, id)
@@ -474,29 +477,69 @@ router.post('/statements-with-ids', async (req, res) => {
       });
     }
 
-    // Query to get SQL statements with IDs
-    const query = `SELECT id, ${columnName} FROM ${tableName}`;
     let rows;
+    let idColumn = 'id';
 
     if (dbType === 'mysql') {
+      // Try to find primary key column for MySQL
+      try {
+        const [pkResult] = await dbConnection.query(
+          `SHOW KEYS FROM ${tableName} WHERE Key_name = 'PRIMARY'`
+        );
+        if (pkResult.length > 0) {
+          idColumn = pkResult[0].Column_name;
+        }
+      } catch (err) {
+        console.log('Could not detect primary key, using default column');
+      }
+
+      const query = `SELECT ${idColumn}, ${columnName} FROM ${tableName}`;
       [rows] = await dbConnection.query(query);
+
     } else if (dbType === 'mssql') {
-      const result = await mssqlPool.request().query(query);
-      rows = result.recordset;
+      // Try to find primary key column for SQL Server
+      try {
+        const pkResult = await mssqlPool.request().query(`
+          SELECT COLUMN_NAME
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+          WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
+          AND TABLE_NAME = '${tableName}'
+        `);
+        if (pkResult.recordset.length > 0) {
+          idColumn = pkResult.recordset[0].COLUMN_NAME;
+        }
+      } catch (err) {
+        console.log('Could not detect primary key, using ROW_NUMBER');
+        // Use ROW_NUMBER as fallback if no primary key
+        const query = `SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS row_id, ${columnName} FROM ${tableName}`;
+        const result = await mssqlPool.request().query(query);
+        rows = result.recordset.map(row => ({
+          [idColumn]: row.row_id,
+          [columnName]: row[columnName]
+        }));
+      }
+
+      if (!rows) {
+        const query = `SELECT ${idColumn}, ${columnName} FROM ${tableName}`;
+        const result = await mssqlPool.request().query(query);
+        rows = result.recordset;
+      }
     }
 
     // Extract SQL statements with IDs
     const statements = rows
       .filter(row => row[columnName] && row[columnName].trim().length > 0)
       .map(row => ({
-        id: row.id,
+        id: row[idColumn],
+        idColumn: idColumn,
         statement: row[columnName]
       }));
 
     res.json({
       success: true,
       statements: statements,
-      count: statements.length
+      count: statements.length,
+      idColumn: idColumn
     });
   } catch (error) {
     console.error('Error fetching statements:', error);
