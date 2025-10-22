@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL INSERT Statement Visualizer</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SQL INSERT Statement Visualizer</h1>
+            <p>Connect to your database and visualize table relationships from SQL statements</p>
+        </header>
+
+        <main>
+            <!-- Database Connection Section -->
+            <section class="card" id="connection-section">
+                <h2>Database Connection</h2>
+                <div class="form-group">
+                    <label for="host">Host:</label>
+                    <input type="text" id="host" value="localhost" placeholder="localhost">
+                </div>
+                <div class="form-group">
+                    <label for="user">User:</label>
+                    <input type="text" id="user" placeholder="root">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" placeholder="password">
+                </div>
+                <div class="form-group">
+                    <label for="database">Database:</label>
+                    <input type="text" id="database" placeholder="database_name">
+                </div>
+                <button id="connect-btn" class="btn btn-primary">Connect</button>
+                <div id="connection-status" class="status-message"></div>
+            </section>
+
+            <!-- Table Selection Section -->
+            <section class="card" id="table-section" style="display: none;">
+                <h2>Select Source Table</h2>
+                <div class="form-group">
+                    <label for="source-table">Table containing SQL statements:</label>
+                    <select id="source-table">
+                        <option value="">-- Select a table --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="column-name">Column containing SQL:</label>
+                    <input type="text" id="column-name" placeholder="sql_statement" value="sql_statement">
+                </div>
+                <button id="fetch-btn" class="btn btn-primary">Fetch Statements</button>
+                <div id="fetch-status" class="status-message"></div>
+            </section>
+
+            <!-- Statements Display Section -->
+            <section class="card" id="statements-section" style="display: none;">
+                <h2>SQL Statements</h2>
+                <div id="statements-info"></div>
+                <div class="statements-container">
+                    <textarea id="statements-display" readonly></textarea>
+                </div>
+                <button id="parse-btn" class="btn btn-primary">Parse & Visualize</button>
+                <div id="parse-status" class="status-message"></div>
+            </section>
+
+            <!-- Visualization Section -->
+            <section class="card" id="visualization-section" style="display: none;">
+                <h2>Table Relationships Visualization</h2>
+                <div class="controls">
+                    <button id="reset-view-btn" class="btn btn-secondary">Reset View</button>
+                    <button id="export-btn" class="btn btn-secondary">Export Data</button>
+                </div>
+                <div id="network-graph"></div>
+            </section>
+
+            <!-- Details Section -->
+            <section class="card" id="details-section" style="display: none;">
+                <h2>Parsed Details</h2>
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="tables">Tables</button>
+                    <button class="tab-btn" data-tab="joins">JOINs</button>
+                    <button class="tab-btn" data-tab="conditions">WHERE Conditions</button>
+                    <button class="tab-btn" data-tab="errors">Errors</button>
+                </div>
+                <div class="tab-content">
+                    <div id="tab-tables" class="tab-pane active"></div>
+                    <div id="tab-joins" class="tab-pane"></div>
+                    <div id="tab-conditions" class="tab-pane"></div>
+                    <div id="tab-errors" class="tab-pane"></div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>SQL INSERT Statement Visualizer &copy; 2024</p>
+        </footer>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/visualizer.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
