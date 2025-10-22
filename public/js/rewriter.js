@@ -166,12 +166,21 @@ const SQLRewriter = {
         if (typeof value === 'number') {
             return value;
         }
-        // If it's a string, quote it with single quotes (SQL standard)
+
+        // If it's a string, check if it's actually a number
         if (typeof value === 'string') {
-            // Escape any single quotes in the value
+            // Check if the string represents a number (integer or decimal)
+            const numericValue = value.trim();
+            if (/^-?\d+(\.\d+)?$/.test(numericValue)) {
+                // It's a numeric string, return without quotes
+                return numericValue;
+            }
+
+            // It's a regular string, quote it with single quotes (SQL standard)
             const escaped = value.replace(/'/g, "''");
             return `'${escaped}'`;
         }
+
         // For other types, convert to string and quote
         return `'${String(value)}'`;
     },
