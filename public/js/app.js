@@ -203,11 +203,24 @@ async function fetchStatementsWithIds() {
     const tableName = sourceTableSelect.value;
     const columnName = document.getElementById('column-name').value;
 
-    const result = await API.getStatementsWithIds(tableName, columnName);
+    console.log('Fetching statements with IDs for table:', tableName, 'column:', columnName);
 
-    if (result.success) {
-        currentStatementsWithIds = result.statements;
-        currentIdColumn = result.idColumn || 'id';
+    try {
+        const result = await API.getStatementsWithIds(tableName, columnName);
+
+        console.log('getStatementsWithIds result:', result);
+
+        if (result.success) {
+            currentStatementsWithIds = result.statements;
+            currentIdColumn = result.idColumn || 'id';
+            console.log('Loaded', currentStatementsWithIds.length, 'statements with IDs');
+        } else {
+            console.error('Failed to fetch statements with IDs:', result.error);
+            showStatus(parseStatus, 'error', `Could not load statements for rewriter: ${result.error}`);
+        }
+    } catch (error) {
+        console.error('Exception fetching statements with IDs:', error);
+        showStatus(parseStatus, 'error', 'Failed to load statements for rewriter');
     }
 }
 
