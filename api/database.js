@@ -171,7 +171,7 @@ function extractStatementInfo(ast, originalSql) {
     whereConditions: []
   };
 
-  // Extract table information
+  // Extract table information from INSERT target
   if (ast.table) {
     if (Array.isArray(ast.table)) {
       ast.table.forEach(tbl => {
@@ -190,9 +190,30 @@ function extractStatementInfo(ast, originalSql) {
     }));
   }
 
-  // Extract JOIN information
-  if (ast.from && Array.isArray(ast.from)) {
-    ast.from.forEach(item => {
+  // For INSERT ... SELECT statements, extract from the SELECT portion
+  let selectAst = null;
+  if (ast.type === 'insert' && ast.values && Array.isArray(ast.values)) {
+    // Check if values contain a SELECT statement
+    const firstValue = ast.values[0];
+    if (firstValue && firstValue.type === 'select') {
+      selectAst = firstValue;
+    }
+  }
+
+  // If we have a SELECT statement (either standalone or from INSERT...SELECT)
+  const astToProcess = selectAst || ast;
+
+  // Extract tables from FROM clause
+  if (astToProcess.from && Array.isArray(astToProcess.from)) {
+    astToProcess.from.forEach(item => {
+      // Add the main table from FROM clause
+      const tableInfo = extractTableInfo(item);
+      // Only add if not already in the list (avoid duplicates)
+      if (!info.tables.some(t => t.name === tableInfo.name)) {
+        info.tables.push(tableInfo);
+      }
+
+      // Extract JOIN information
       if (item.join) {
         info.joins.push({
           type: item.join,
@@ -203,9 +224,24 @@ function extractStatementInfo(ast, originalSql) {
     });
   }
 
+  // Extract columns from SELECT clause if present
+  if (selectAst && selectAst.columns && selectAst.columns !== '*') {
+    if (Array.isArray(selectAst.columns)) {
+      selectAst.columns.forEach(col => {
+        if (col.expr && col.expr.type === 'column_ref') {
+          info.columns.push({
+            name: col.expr.column,
+            table: col.expr.table,
+            alias: col.as || null
+          });
+        }
+      });
+    }
+  }
+
   // Extract WHERE clause conditions
-  if (ast.where) {
-    info.whereConditions = extractWhereConditions(ast.where);
+  if (astToProcess.where) {
+    info.whereConditions = extractWhereConditions(astToProcess.where);
   }
 
   return info;
