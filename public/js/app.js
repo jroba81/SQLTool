@@ -485,6 +485,12 @@ function handlePreviewRewrite() {
         return;
     }
 
+    // Check if we have statements
+    if (!currentStatementsWithIds || currentStatementsWithIds.length === 0) {
+        showStatus(rewriteStatus, 'error', 'No statements loaded. Please fetch statements first.');
+        return;
+    }
+
     // Group selected conditions by table
     selectedConditions = {};
     checkboxes.forEach(checkbox => {
@@ -497,6 +503,9 @@ function handlePreviewRewrite() {
         selectedConditions[table].push(condition);
     });
 
+    console.log('Selected conditions:', selectedConditions);
+    console.log('Statements to rewrite:', currentStatementsWithIds.length);
+
     // Rewrite statements
     const rewrittenStatements = currentStatementsWithIds.map((item, index) => {
         const originalSql = item.statement;
@@ -505,6 +514,7 @@ function handlePreviewRewrite() {
         const parsedStatement = parsedResult.data[index];
 
         if (!parsedStatement) {
+            console.warn(`No parsed data for statement ${index}`);
             // No parsed data, return unchanged
             return {
                 id: item.id,
@@ -517,10 +527,14 @@ function handlePreviewRewrite() {
         const tableAliasMap = {};
         const tableNamesInStatement = new Set();
 
-        parsedStatement.tables.forEach(table => {
-            tableNamesInStatement.add(table.name);
-            tableAliasMap[table.name] = table.alias || table.name;
-        });
+        if (parsedStatement.tables && Array.isArray(parsedStatement.tables)) {
+            parsedStatement.tables.forEach(table => {
+                if (table && table.name) {
+                    tableNamesInStatement.add(table.name);
+                    tableAliasMap[table.name] = table.alias || table.name;
+                }
+            });
+        }
 
         // Apply only conditions for tables that exist in this statement
         let newSql = originalSql;

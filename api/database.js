@@ -279,20 +279,32 @@ function extractBasicInfo(sql) {
     }
   }
 
-  // Extract basic WHERE conditions (simplified - just the column names)
-  const whereMatch = sql.match(/WHERE\s+(.*?)(?:GROUP BY|ORDER BY|$)/is);
+  // Extract WHERE conditions with actual values
+  const whereMatch = sql.match(/WHERE\s+(.*?)(?:GROUP BY|ORDER BY|HAVING|$)/is);
   if (whereMatch) {
     const whereClause = whereMatch[1];
-    // Find column references (word.word or [word])
-    const columnMatches = whereClause.matchAll(/(\w+)\.(\w+|\[[^\]]+\])|(\[[^\]]+\])/g);
-    for (const match of columnMatches) {
-      const table = match[1];
-      const column = match[2] || match[3];
-      if (table && column) {
+
+    // Pattern to match conditions like: table.column operator value
+    // Handles: =, <>, !=, <, >, <=, >=, IN, NOT IN
+    const conditionPattern = /(\w+)\.(\w+|\[[^\]]+\])\s*(=|<>|!=|<=|>=|<|>|IN|NOT IN)\s*(?:\(([^)]+)\)|'([^']*)'|"([^"]*)"|(\d+))/gi;
+
+    let condMatch;
+    while ((condMatch = conditionPattern.exec(whereClause)) !== null) {
+      const table = condMatch[1];
+      const column = condMatch[2].replace(/[\[\]]/g, '');
+      const operator = condMatch[3].toUpperCase();
+
+      // Get the value from whichever group matched
+      let value = condMatch[4] || condMatch[5] || condMatch[6] || condMatch[7];
+
+      if (value) {
+        // Clean up the value
+        value = value.trim();
+
         info.whereConditions.push({
-          operator: '=', // Unknown, placeholder
-          left: { type: 'column', table: table, column: column.replace(/[\[\]]/g, '') },
-          right: { type: 'value', value: '?' }
+          operator: operator,
+          left: { type: 'column', table: table, column: column },
+          right: { type: 'value', value: value }
         });
       }
     }
