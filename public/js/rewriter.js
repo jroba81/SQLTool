@@ -107,6 +107,9 @@ const SQLRewriter = {
         const rightObj = condition.right;
         const operator = condition.operator;
 
+        console.log('[formatCondition] Operator:', operator);
+        console.log('[formatCondition] Right object:', rightObj);
+
         // Handle different types of right-hand side values
         if (rightObj?.type === 'column') {
             // It's a column reference
@@ -119,9 +122,12 @@ const SQLRewriter = {
                    rightObj?.type === 'number') {
             // It's a literal value
             // For IN/NOT IN operators, preserve the list format with parentheses
+            console.log('[formatCondition] Calling formatValue with:', rightObj.value, 'operator:', operator);
             right = this.formatValue(rightObj.value, operator);
+            console.log('[formatCondition] Formatted right side:', right);
         } else if (rightObj?.value !== undefined) {
             // Fallback: has a value property
+            console.log('[formatCondition] Using fallback, calling formatValue with:', rightObj.value);
             right = this.formatValue(rightObj.value, operator);
         } else if (rightObj?.type === 'function') {
             // It's a function call - stringify it
@@ -134,20 +140,33 @@ const SQLRewriter = {
         const table = condition.left?.table || '';
         const tablePrefix = table ? `${table}.` : '';
 
-        return `${tablePrefix}${left} ${operator} ${right}`;
+        const result = `${tablePrefix}${left} ${operator} ${right}`;
+        console.log('[formatCondition] Final result:', result);
+        return result;
     },
 
     // Format value with proper quoting
     formatValue(value, operator) {
+        // Normalize operator to uppercase for comparison
+        const normalizedOp = operator ? operator.toUpperCase().trim() : '';
+
         // For IN/NOT IN operators, preserve the parentheses format
-        if (operator && (operator.toUpperCase() === 'IN' || operator.toUpperCase() === 'NOT IN')) {
+        if (normalizedOp === 'IN' || normalizedOp === 'NOT IN' || normalizedOp.endsWith(' IN')) {
             if (typeof value === 'string') {
+                const trimmedValue = value.trim();
                 // If the value already has parentheses, return as-is
-                if (value.trim().startsWith('(') && value.trim().endsWith(')')) {
-                    return value;
+                if (trimmedValue.startsWith('(') && trimmedValue.endsWith(')')) {
+                    return trimmedValue;
                 }
                 // Otherwise, wrap it in parentheses
-                return `(${value})`;
+                return `(${trimmedValue})`;
+            }
+            // If it's an array, format as list
+            if (Array.isArray(value)) {
+                const formatted = value.map(v =>
+                    typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : v
+                ).join(', ');
+                return `(${formatted})`;
             }
         }
 

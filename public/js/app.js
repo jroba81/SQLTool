@@ -482,6 +482,10 @@ function displayRewriterSection(result) {
                 const checkboxId = `cond-${tableName}-${index}`;
                 // Escape the condition for HTML attribute storage
                 const escapedCondition = item.condition.replace(/"/g, '&quot;');
+
+                console.log(`Condition #${index} for ${tableName}:`, item.condition);
+                console.log(`Escaped condition:`, escapedCondition);
+
                 html += `
                     <div class="condition-option">
                         <input type="checkbox" id="${checkboxId}" data-table="${tableName}" data-condition="${escapedCondition}">
@@ -524,6 +528,9 @@ function handlePreviewRewrite() {
     checkboxes.forEach(checkbox => {
         const table = checkbox.dataset.table;
         const condition = checkbox.dataset.condition;
+
+        console.log(`Retrieved condition from checkbox for ${table}:`, condition);
+        console.log(`Condition type:`, typeof condition);
 
         if (!selectedConditions[table]) {
             selectedConditions[table] = [];
