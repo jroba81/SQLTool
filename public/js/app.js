@@ -437,9 +437,11 @@ function displayRewriterSection(result) {
 
             conditions.forEach((item, index) => {
                 const checkboxId = `cond-${tableName}-${index}`;
+                // Escape the condition for HTML attribute storage
+                const escapedCondition = item.condition.replace(/"/g, '&quot;');
                 html += `
                     <div class="condition-option">
-                        <input type="checkbox" id="${checkboxId}" data-table="${tableName}" data-condition="${item.condition}">
+                        <input type="checkbox" id="${checkboxId}" data-table="${tableName}" data-condition="${escapedCondition}">
                         <label for="${checkboxId}">${item.condition}</label>
                         <span class="condition-count">(used in ${item.count} statement${item.count > 1 ? 's' : ''})</span>
                     </div>

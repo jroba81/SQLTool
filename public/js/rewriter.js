@@ -104,20 +104,29 @@ const SQLRewriter = {
         const left = condition.left?.column || JSON.stringify(condition.left);
 
         let right;
-        if (condition.right?.type === 'value') {
-            // It's a literal value
-            right = this.formatValue(condition.right.value);
-        } else if (condition.right?.type === 'column') {
+        const rightObj = condition.right;
+
+        // Handle different types of right-hand side values
+        if (rightObj?.type === 'column') {
             // It's a column reference
-            const rightTable = condition.right.table || '';
+            const rightTable = rightObj.table || '';
             const rightTablePrefix = rightTable ? `${rightTable}.` : '';
-            right = `${rightTablePrefix}${condition.right.column}`;
-        } else if (condition.right?.value !== undefined) {
+            right = `${rightTablePrefix}${rightObj.column}`;
+        } else if (rightObj?.type === 'value' ||
+                   rightObj?.type === 'single_quote_string' ||
+                   rightObj?.type === 'double_quote_string' ||
+                   rightObj?.type === 'number') {
+            // It's a literal value
+            right = this.formatValue(rightObj.value);
+        } else if (rightObj?.value !== undefined) {
             // Fallback: has a value property
-            right = this.formatValue(condition.right.value);
+            right = this.formatValue(rightObj.value);
+        } else if (rightObj?.type === 'function') {
+            // It's a function call - stringify it
+            right = `${rightObj.name}(...)`;
         } else {
             // Last resort: stringify it
-            right = JSON.stringify(condition.right);
+            right = JSON.stringify(rightObj);
         }
 
         const table = condition.left?.table || '';
