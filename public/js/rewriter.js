@@ -105,6 +105,7 @@ const SQLRewriter = {
 
         let right;
         const rightObj = condition.right;
+        const operator = condition.operator;
 
         // Handle different types of right-hand side values
         if (rightObj?.type === 'column') {
@@ -117,10 +118,11 @@ const SQLRewriter = {
                    rightObj?.type === 'double_quote_string' ||
                    rightObj?.type === 'number') {
             // It's a literal value
-            right = this.formatValue(rightObj.value);
+            // For IN/NOT IN operators, preserve the list format with parentheses
+            right = this.formatValue(rightObj.value, operator);
         } else if (rightObj?.value !== undefined) {
             // Fallback: has a value property
-            right = this.formatValue(rightObj.value);
+            right = this.formatValue(rightObj.value, operator);
         } else if (rightObj?.type === 'function') {
             // It's a function call - stringify it
             right = `${rightObj.name}(...)`;
@@ -132,23 +134,35 @@ const SQLRewriter = {
         const table = condition.left?.table || '';
         const tablePrefix = table ? `${table}.` : '';
 
-        return `${tablePrefix}${left} ${condition.operator} ${right}`;
+        return `${tablePrefix}${left} ${operator} ${right}`;
     },
 
     // Format value with proper quoting
-    formatValue(value) {
+    formatValue(value, operator) {
+        // For IN/NOT IN operators, preserve the parentheses format
+        if (operator && (operator.toUpperCase() === 'IN' || operator.toUpperCase() === 'NOT IN')) {
+            if (typeof value === 'string') {
+                // If the value already has parentheses, return as-is
+                if (value.trim().startsWith('(') && value.trim().endsWith(')')) {
+                    return value;
+                }
+                // Otherwise, wrap it in parentheses
+                return `(${value})`;
+            }
+        }
+
         // If it's a number, return as-is
         if (typeof value === 'number') {
             return value;
         }
-        // If it's a string, quote it
+        // If it's a string, quote it with single quotes (SQL standard)
         if (typeof value === 'string') {
-            // Escape any quotes in the value
-            const escaped = value.replace(/"/g, '\\"');
-            return `"${escaped}"`;
+            // Escape any single quotes in the value
+            const escaped = value.replace(/'/g, "''");
+            return `'${escaped}'`;
         }
         // For other types, convert to string and quote
-        return `"${String(value)}"`;
+        return `'${String(value)}'`;
     },
 
     // Extract table alias from FROM clause
