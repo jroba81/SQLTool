@@ -385,9 +385,22 @@ function displayRewriterSection(result) {
     const tableConditionsMap = new Map();
 
     result.data.forEach((statement, index) => {
+        // Create alias to table name mapping for this statement
+        const aliasMap = {};
+        statement.tables.forEach(table => {
+            if (table.alias) {
+                aliasMap[table.alias] = table.name;
+            }
+            // Also map the table name to itself
+            aliasMap[table.name] = table.name;
+        });
+
         statement.whereConditions.forEach(condition => {
             // Determine which table this condition applies to
-            const tableName = condition.left?.table || statement.tables[0]?.name || 'unknown';
+            const aliasOrTableName = condition.left?.table || statement.tables[0]?.name || 'unknown';
+
+            // Map alias to actual table name
+            const tableName = aliasMap[aliasOrTableName] || aliasOrTableName;
 
             if (!tableConditionsMap.has(tableName)) {
                 tableConditionsMap.set(tableName, []);
