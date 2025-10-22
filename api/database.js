@@ -616,6 +616,7 @@ router.post('/statements-with-ids', async (req, res) => {
 
     } else if (dbType === 'mssql') {
       // Try to find primary key column for SQL Server
+      let hasPrimaryKey = false;
       try {
         const pkResult = await mssqlPool.request().query(`
           SELECT COLUMN_NAME
@@ -625,20 +626,25 @@ router.post('/statements-with-ids', async (req, res) => {
         `);
         if (pkResult.recordset.length > 0) {
           idColumn = pkResult.recordset[0].COLUMN_NAME;
+          hasPrimaryKey = true;
+          console.log(`Detected primary key column: ${idColumn}`);
+        } else {
+          console.log('No primary key found, will use ROW_NUMBER');
         }
       } catch (err) {
-        console.log('Could not detect primary key, using ROW_NUMBER');
-        // Use ROW_NUMBER as fallback if no primary key
-        const query = `SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS row_id, ${columnName} FROM ${tableName}`;
-        const result = await mssqlPool.request().query(query);
-        rows = result.recordset.map(row => ({
-          [idColumn]: row.row_id,
-          [columnName]: row[columnName]
-        }));
+        console.log('Error detecting primary key:', err.message);
       }
 
-      if (!rows) {
+      // If we have a primary key, use it. Otherwise use ROW_NUMBER
+      if (hasPrimaryKey) {
         const query = `SELECT ${idColumn}, ${columnName} FROM ${tableName}`;
+        const result = await mssqlPool.request().query(query);
+        rows = result.recordset;
+      } else {
+        // Use ROW_NUMBER as fallback if no primary key
+        idColumn = 'row_id';
+        const query = `SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS row_id, ${columnName} FROM ${tableName}`;
+        console.log('Using ROW_NUMBER query:', query);
         const result = await mssqlPool.request().query(query);
         rows = result.recordset;
       }
