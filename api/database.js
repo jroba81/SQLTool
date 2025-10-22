@@ -184,11 +184,20 @@ router.post('/parse', async (req, res) => {
           parsedData.push(statementInfo);
         }
       } catch (parseError) {
-        errors.push({
-          index: i,
-          statement: statements[i].substring(0, 100) + '...',
-          error: parseError.message
-        });
+        // If parsing fails, try basic regex extraction for SQL Server statements
+        try {
+          const basicInfo = extractBasicInfo(statements[i]);
+          if (basicInfo) {
+            parsedData.push(basicInfo);
+          }
+        } catch (regexError) {
+          // Both parsing methods failed
+          errors.push({
+            index: i,
+            statement: statements[i].substring(0, 100) + '...',
+            error: parseError.message
+          });
+        }
       }
     }
 
@@ -207,6 +216,90 @@ router.post('/parse', async (req, res) => {
     });
   }
 });
+
+// Fallback: Extract basic info using regex when parser fails (for SQL Server specific syntax)
+function extractBasicInfo(sql) {
+  const info = {
+    type: 'insert',
+    originalSql: sql,
+    tables: [],
+    columns: [],
+    joins: [],
+    whereConditions: []
+  };
+
+  // Extract INSERT INTO table name (handles temp tables like #tmpTable and brackets)
+  const insertMatch = sql.match(/INSERT\s+INTO\s+([#@]?\w+|\[[^\]]+\])/i);
+  if (insertMatch) {
+    const tableName = insertMatch[1].replace(/[\[\]]/g, '');
+    info.tables.push({ name: tableName, alias: null });
+  }
+
+  // Extract FROM clause tables (handles database.schema.table format and table hints)
+  const fromMatches = sql.matchAll(/FROM\s+([\w\.]+|\[[^\]]+\])\s*(\w+)?\s*(?:\(NOLOCK\))?/gi);
+  for (const match of fromMatches) {
+    let tableName = match[1];
+    // Handle three-part names (database.schema.table) - take just the table name
+    if (tableName.includes('.')) {
+      const parts = tableName.split('.');
+      tableName = parts[parts.length - 1];
+    }
+    tableName = tableName.replace(/[\[\]]/g, '');
+    const alias = match[2] || null;
+
+    // Avoid duplicates
+    if (!info.tables.some(t => t.name === tableName)) {
+      info.tables.push({ name: tableName, alias: alias });
+    }
+  }
+
+  // Extract JOIN tables
+  const joinMatches = sql.matchAll(/(INNER|LEFT|RIGHT|FULL|CROSS)?\s*JOIN\s+([\w\.]+|\[[^\]]+\])\s*(\w+)?/gi);
+  for (const match of joinMatches) {
+    const joinType = match[1] ? `${match[1].toUpperCase()} JOIN` : 'JOIN';
+    let tableName = match[2];
+
+    // Handle three-part names
+    if (tableName.includes('.')) {
+      const parts = tableName.split('.');
+      tableName = parts[parts.length - 1];
+    }
+    tableName = tableName.replace(/[\[\]]/g, '');
+    const alias = match[3] || null;
+
+    info.joins.push({
+      type: joinType,
+      table: { name: tableName, alias: alias },
+      condition: null // Can't easily extract with regex
+    });
+
+    // Add to tables list if not already there
+    if (!info.tables.some(t => t.name === tableName)) {
+      info.tables.push({ name: tableName, alias: alias });
+    }
+  }
+
+  // Extract basic WHERE conditions (simplified - just the column names)
+  const whereMatch = sql.match(/WHERE\s+(.*?)(?:GROUP BY|ORDER BY|$)/is);
+  if (whereMatch) {
+    const whereClause = whereMatch[1];
+    // Find column references (word.word or [word])
+    const columnMatches = whereClause.matchAll(/(\w+)\.(\w+|\[[^\]]+\])|(\[[^\]]+\])/g);
+    for (const match of columnMatches) {
+      const table = match[1];
+      const column = match[2] || match[3];
+      if (table && column) {
+        info.whereConditions.push({
+          operator: '=', // Unknown, placeholder
+          left: { type: 'column', table: table, column: column.replace(/[\[\]]/g, '') },
+          right: { type: 'value', value: '?' }
+        });
+      }
+    }
+  }
+
+  return info;
+}
 
 // Helper function to extract information from parsed AST
 function extractStatementInfo(ast, originalSql) {
