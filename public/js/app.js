@@ -481,16 +481,56 @@ function handlePreviewRewrite() {
     });
 
     // Rewrite statements
-    const rewrittenStatements = currentStatementsWithIds.map(item => {
+    const rewrittenStatements = currentStatementsWithIds.map((item, index) => {
         const originalSql = item.statement;
 
-        // Determine which table conditions to apply
-        // For simplicity, we'll apply all selected conditions to all statements
-        // A more sophisticated approach would parse each statement to determine its tables
+        // Get parsed data for this statement
+        const parsedStatement = parsedResult.data[index];
 
+        if (!parsedStatement) {
+            // No parsed data, return unchanged
+            return {
+                id: item.id,
+                original: originalSql,
+                rewritten: originalSql
+            };
+        }
+
+        // Build table mapping for this statement (table name -> alias)
+        const tableAliasMap = {};
+        const tableNamesInStatement = new Set();
+
+        parsedStatement.tables.forEach(table => {
+            tableNamesInStatement.add(table.name);
+            tableAliasMap[table.name] = table.alias || table.name;
+        });
+
+        // Apply only conditions for tables that exist in this statement
         let newSql = originalSql;
-        Object.entries(selectedConditions).forEach(([table, conditions]) => {
-            newSql = SQLRewriter.rewriteStatement(newSql, conditions);
+
+        Object.entries(selectedConditions).forEach(([tableName, conditions]) => {
+            // Only apply if this statement uses this table
+            if (tableNamesInStatement.has(tableName)) {
+                // Get the alias used in THIS specific statement
+                const aliasInStatement = tableAliasMap[tableName];
+
+                // Map conditions to use the correct alias for this statement
+                const mappedConditions = conditions.map(condition => {
+                    // The condition has format like "o.column_name = value"
+                    // We need to replace the alias prefix with the one used in this statement
+
+                    // Extract the current alias from the condition (everything before the first dot)
+                    const match = condition.match(/^(\w+)\./);
+                    if (match) {
+                        const conditionAlias = match[1];
+                        // Replace it with the alias used in this specific statement
+                        return condition.replace(new RegExp(`^${conditionAlias}\\.`), `${aliasInStatement}.`);
+                    }
+                    return condition;
+                });
+
+                newSql = SQLRewriter.rewriteStatement(newSql, mappedConditions);
+            }
         });
 
         return {

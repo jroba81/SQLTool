@@ -102,9 +102,23 @@ const SQLRewriter = {
     // Format condition for SQL
     formatCondition(condition) {
         const left = condition.left?.column || JSON.stringify(condition.left);
-        const right = condition.right?.value !== undefined
-            ? this.formatValue(condition.right.value, condition.right.type)
-            : (condition.right?.column || JSON.stringify(condition.right));
+
+        let right;
+        if (condition.right?.type === 'value') {
+            // It's a literal value
+            right = this.formatValue(condition.right.value);
+        } else if (condition.right?.type === 'column') {
+            // It's a column reference
+            const rightTable = condition.right.table || '';
+            const rightTablePrefix = rightTable ? `${rightTable}.` : '';
+            right = `${rightTablePrefix}${condition.right.column}`;
+        } else if (condition.right?.value !== undefined) {
+            // Fallback: has a value property
+            right = this.formatValue(condition.right.value);
+        } else {
+            // Last resort: stringify it
+            right = JSON.stringify(condition.right);
+        }
 
         const table = condition.left?.table || '';
         const tablePrefix = table ? `${table}.` : '';
@@ -113,15 +127,19 @@ const SQLRewriter = {
     },
 
     // Format value with proper quoting
-    formatValue(value, type) {
-        if (type === 'single_quote_string' || type === 'double_quote_string') {
-            return `"${value}"`;
-        }
-        if (type === 'number') {
+    formatValue(value) {
+        // If it's a number, return as-is
+        if (typeof value === 'number') {
             return value;
         }
-        // Default to quoted string
-        return `"${value}"`;
+        // If it's a string, quote it
+        if (typeof value === 'string') {
+            // Escape any quotes in the value
+            const escaped = value.replace(/"/g, '\\"');
+            return `"${escaped}"`;
+        }
+        // For other types, convert to string and quote
+        return `"${String(value)}"`;
     },
 
     // Extract table alias from FROM clause
