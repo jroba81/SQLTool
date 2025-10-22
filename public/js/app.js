@@ -1,6 +1,8 @@
 // Main application logic
 let currentStatements = [];
+let currentStatementsWithIds = [];
 let parsedResult = null;
+let selectedConditions = {};
 
 // DOM elements
 const connectBtn = document.getElementById('connect-btn');
@@ -17,10 +19,18 @@ const tableSection = document.getElementById('table-section');
 const statementsSection = document.getElementById('statements-section');
 const visualizationSection = document.getElementById('visualization-section');
 const detailsSection = document.getElementById('details-section');
+const rewriterSection = document.getElementById('rewriter-section');
 
 const sourceTableSelect = document.getElementById('source-table');
 const statementsDisplay = document.getElementById('statements-display');
 const statementsInfo = document.getElementById('statements-info');
+
+// Rewriter elements
+const previewRewriteBtn = document.getElementById('preview-rewrite-btn');
+const applyRewriteBtn = document.getElementById('apply-rewrite-btn');
+const cancelRewriteBtn = document.getElementById('cancel-rewrite-btn');
+const rewriteStatus = document.getElementById('rewrite-status');
+const previewSection = document.getElementById('preview-section');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -35,6 +45,11 @@ function setupEventListeners() {
     parseBtn.addEventListener('click', handleParseStatements);
     resetViewBtn.addEventListener('click', () => Visualizer.resetView());
     exportBtn.addEventListener('click', () => Visualizer.exportData());
+
+    // Rewriter event listeners
+    previewRewriteBtn.addEventListener('click', handlePreviewRewrite);
+    applyRewriteBtn.addEventListener('click', handleApplyRewrite);
+    cancelRewriteBtn.addEventListener('click', handleCancelRewrite);
 
     // Tab switching
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -157,8 +172,27 @@ async function handleParseStatements() {
         // Show details
         displayDetails(result);
         detailsSection.style.display = 'block';
+
+        // Fetch statements with IDs for rewriter
+        await fetchStatementsWithIds();
+
+        // Show rewriter section
+        displayRewriterSection(result);
+        rewriterSection.style.display = 'block';
     } else {
         showStatus(parseStatus, 'error', `Parsing failed: ${result.error}`);
+    }
+}
+
+// Fetch statements with IDs
+async function fetchStatementsWithIds() {
+    const tableName = sourceTableSelect.value;
+    const columnName = document.getElementById('column-name').value;
+
+    const result = await API.getStatementsWithIds(tableName, columnName);
+
+    if (result.success) {
+        currentStatementsWithIds = result.statements;
     }
 }
 
@@ -340,4 +374,200 @@ function showStatus(element, type, message) {
     setTimeout(() => {
         element.style.display = 'none';
     }, 5000);
+}
+
+// Display rewriter section
+function displayRewriterSection(result) {
+    const conditionSelector = document.getElementById('condition-selector');
+    selectedConditions = {};
+
+    // Group conditions by table
+    const tableConditionsMap = new Map();
+
+    result.data.forEach((statement, index) => {
+        statement.whereConditions.forEach(condition => {
+            // Determine which table this condition applies to
+            const tableName = condition.left?.table || statement.tables[0]?.name || 'unknown';
+
+            if (!tableConditionsMap.has(tableName)) {
+                tableConditionsMap.set(tableName, []);
+            }
+
+            // Format the condition
+            const conditionStr = SQLRewriter.formatCondition(condition);
+
+            // Check if this condition already exists
+            const existing = tableConditionsMap.get(tableName).find(c => c.condition === conditionStr);
+            if (existing) {
+                existing.count++;
+            } else {
+                tableConditionsMap.get(tableName).push({
+                    condition: conditionStr,
+                    conditionObj: condition,
+                    count: 1
+                });
+            }
+        });
+    });
+
+    // Build UI
+    let html = '';
+
+    if (tableConditionsMap.size === 0) {
+        html = '<div class="no-data">No WHERE conditions found in the statements</div>';
+    } else {
+        tableConditionsMap.forEach((conditions, tableName) => {
+            html += `
+                <div class="table-condition-group">
+                    <h4>Table: ${tableName}</h4>
+            `;
+
+            conditions.forEach((item, index) => {
+                const checkboxId = `cond-${tableName}-${index}`;
+                html += `
+                    <div class="condition-option">
+                        <input type="checkbox" id="${checkboxId}" data-table="${tableName}" data-condition="${item.condition}">
+                        <label for="${checkboxId}">${item.condition}</label>
+                        <span class="condition-count">(used in ${item.count} statement${item.count > 1 ? 's' : ''})</span>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+        });
+    }
+
+    conditionSelector.innerHTML = html;
+
+    // Reset preview
+    previewSection.style.display = 'none';
+    applyRewriteBtn.style.display = 'none';
+    cancelRewriteBtn.style.display = 'none';
+}
+
+// Handle preview rewrite
+function handlePreviewRewrite() {
+    // Collect selected conditions
+    const checkboxes = document.querySelectorAll('#condition-selector input[type="checkbox"]:checked');
+
+    if (checkboxes.length === 0) {
+        showStatus(rewriteStatus, 'error', 'Please select at least one WHERE condition to apply');
+        return;
+    }
+
+    // Group selected conditions by table
+    selectedConditions = {};
+    checkboxes.forEach(checkbox => {
+        const table = checkbox.dataset.table;
+        const condition = checkbox.dataset.condition;
+
+        if (!selectedConditions[table]) {
+            selectedConditions[table] = [];
+        }
+        selectedConditions[table].push(condition);
+    });
+
+    // Rewrite statements
+    const rewrittenStatements = currentStatementsWithIds.map(item => {
+        const originalSql = item.statement;
+
+        // Determine which table conditions to apply
+        // For simplicity, we'll apply all selected conditions to all statements
+        // A more sophisticated approach would parse each statement to determine its tables
+
+        let newSql = originalSql;
+        Object.entries(selectedConditions).forEach(([table, conditions]) => {
+            newSql = SQLRewriter.rewriteStatement(newSql, conditions);
+        });
+
+        return {
+            id: item.id,
+            original: originalSql,
+            rewritten: newSql
+        };
+    });
+
+    // Display preview
+    displayPreview(rewrittenStatements);
+
+    // Show apply/cancel buttons
+    applyRewriteBtn.style.display = 'inline-block';
+    cancelRewriteBtn.style.display = 'inline-block';
+    previewSection.style.display = 'block';
+
+    showStatus(rewriteStatus, 'info', 'Preview generated. Review and click "Apply Changes" to update the database.');
+}
+
+// Display preview
+function displayPreview(rewrittenStatements) {
+    const beforeTextarea = document.querySelector('#preview-before textarea');
+    const afterTextarea = document.querySelector('#preview-after textarea');
+
+    const beforeText = rewrittenStatements.map((item, i) =>
+        `-- Statement ${i + 1} (ID: ${item.id})\n${item.original}`
+    ).join('\n\n---\n\n');
+
+    const afterText = rewrittenStatements.map((item, i) =>
+        `-- Statement ${i + 1} (ID: ${item.id})\n${item.rewritten}`
+    ).join('\n\n---\n\n');
+
+    beforeTextarea.value = beforeText;
+    afterTextarea.value = afterText;
+
+    // Store for later use
+    window.rewrittenStatements = rewrittenStatements;
+}
+
+// Handle apply rewrite
+async function handleApplyRewrite() {
+    if (!window.rewrittenStatements) {
+        showStatus(rewriteStatus, 'error', 'No rewritten statements to apply');
+        return;
+    }
+
+    if (!confirm('Are you sure you want to update the SQL statements in the database? This action cannot be undone.')) {
+        return;
+    }
+
+    applyRewriteBtn.disabled = true;
+    applyRewriteBtn.innerHTML = 'Applying... <span class="spinner"></span>';
+
+    const tableName = sourceTableSelect.value;
+    const columnName = document.getElementById('column-name').value;
+
+    const updates = window.rewrittenStatements.map(item => ({
+        id: item.id,
+        newStatement: item.rewritten
+    }));
+
+    const result = await API.updateStatements(tableName, columnName, updates);
+
+    applyRewriteBtn.disabled = false;
+    applyRewriteBtn.innerHTML = 'Apply Changes to Database';
+
+    if (result.success) {
+        showStatus(rewriteStatus, 'success', result.message);
+
+        // Reset and hide preview
+        previewSection.style.display = 'none';
+        applyRewriteBtn.style.display = 'none';
+        cancelRewriteBtn.style.display = 'none';
+
+        // Refresh statements
+        setTimeout(() => {
+            handleFetchStatements();
+        }, 1500);
+    } else {
+        showStatus(rewriteStatus, 'error', `Failed to update statements: ${result.error}`);
+    }
+}
+
+// Handle cancel rewrite
+function handleCancelRewrite() {
+    previewSection.style.display = 'none';
+    applyRewriteBtn.style.display = 'none';
+    cancelRewriteBtn.style.display = 'none';
+    window.rewrittenStatements = null;
+
+    showStatus(rewriteStatus, 'info', 'Preview cancelled');
 }

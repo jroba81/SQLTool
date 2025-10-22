@@ -81,5 +81,49 @@ const API = {
                 error: error.message
             };
         }
+    },
+
+    // Get SQL statements with IDs
+    async getStatementsWithIds(tableName, columnName) {
+        try {
+            const response = await fetch(`${this.baseUrl}/statements-with-ids`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ tableName, columnName })
+            });
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error fetching statements with IDs:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // Update SQL statements
+    async updateStatements(tableName, columnName, updates) {
+        try {
+            const response = await fetch(`${this.baseUrl}/update-statements`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ tableName, columnName, updates })
+            });
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error updating statements:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 };

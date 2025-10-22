@@ -92,6 +92,37 @@
                     <div id="tab-errors" class="tab-pane"></div>
                 </div>
             </section>
+
+            <!-- WHERE Condition Rewriter Section -->
+            <section class="card" id="rewriter-section" style="display: none;">
+                <h2>WHERE Condition Rewriter</h2>
+                <p class="info-text">Select WHERE conditions to apply across all INSERT statements for each table.</p>
+
+                <div id="condition-selector"></div>
+
+                <div class="rewriter-actions">
+                    <button id="preview-rewrite-btn" class="btn btn-primary">Preview Rewritten Statements</button>
+                    <button id="apply-rewrite-btn" class="btn btn-primary" style="display: none;">Apply Changes to Database</button>
+                    <button id="cancel-rewrite-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
+                </div>
+
+                <div id="rewrite-status" class="status-message"></div>
+
+                <!-- Preview Section -->
+                <div id="preview-section" style="display: none; margin-top: 20px;">
+                    <h3>Preview of Rewritten Statements</h3>
+                    <div class="preview-container">
+                        <div id="preview-before" class="preview-pane">
+                            <h4>Before</h4>
+                            <textarea readonly></textarea>
+                        </div>
+                        <div id="preview-after" class="preview-pane">
+                            <h4>After</h4>
+                            <textarea readonly></textarea>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <footer>
@@ -101,6 +132,7 @@
 
     <script src="js/api.js"></script>
     <script src="js/visualizer.js"></script>
+    <script src="js/rewriter.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

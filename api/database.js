@@ -342,4 +342,98 @@ function extractCondition(condition) {
   };
 }
 
+// Update SQL statements in database
+router.post('/update-statements', async (req, res) => {
+  try {
+    const { tableName, columnName, updates } = req.body;
+
+    if (!dbConnection) {
+      return res.status(400).json({
+        success: false,
+        error: 'Not connected to database'
+      });
+    }
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid updates array'
+      });
+    }
+
+    // Update each statement
+    let updateCount = 0;
+    const errors = [];
+
+    for (const update of updates) {
+      try {
+        const { id, newStatement } = update;
+
+        // Build update query with parameterized values for security
+        const query = `UPDATE ${tableName} SET ${columnName} = ? WHERE id = ?`;
+        await dbConnection.execute(query, [newStatement, id]);
+
+        updateCount++;
+      } catch (updateError) {
+        errors.push({
+          id: update.id,
+          error: updateError.message
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      updated: updateCount,
+      errors: errors,
+      message: `Successfully updated ${updateCount} of ${updates.length} statements`
+    });
+
+  } catch (error) {
+    console.error('Error updating statements:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Get statements with IDs for updating
+router.post('/statements-with-ids', async (req, res) => {
+  try {
+    const { tableName, columnName } = req.body;
+
+    if (!dbConnection) {
+      return res.status(400).json({
+        success: false,
+        error: 'Not connected to database'
+      });
+    }
+
+    // Query to get SQL statements with IDs
+    const query = `SELECT id, ${columnName} FROM ${tableName}`;
+    const [rows] = await dbConnection.query(query);
+
+    // Extract SQL statements with IDs
+    const statements = rows
+      .filter(row => row[columnName] && row[columnName].trim().length > 0)
+      .map(row => ({
+        id: row.id,
+        statement: row[columnName]
+      }));
+
+    res.json({
+      success: true,
+      statements: statements,
+      count: statements.length
+    });
+  } catch (error) {
+    console.error('Error fetching statements:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
