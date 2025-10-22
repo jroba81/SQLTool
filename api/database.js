@@ -192,11 +192,12 @@ function extractStatementInfo(ast, originalSql) {
 
   // For INSERT ... SELECT statements, extract from the SELECT portion
   let selectAst = null;
-  if (ast.type === 'insert' && ast.values && Array.isArray(ast.values)) {
-    // Check if values contain a SELECT statement
-    const firstValue = ast.values[0];
-    if (firstValue && firstValue.type === 'select') {
-      selectAst = firstValue;
+  if (ast.type === 'insert' && ast.values) {
+    // Check if values is a SELECT statement (object) or contains one (array)
+    if (ast.values.type === 'select') {
+      selectAst = ast.values;
+    } else if (Array.isArray(ast.values) && ast.values[0] && ast.values[0].type === 'select') {
+      selectAst = ast.values[0];
     }
   }
 
