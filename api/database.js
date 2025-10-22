@@ -1,35 +1,73 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
+const mssql = require('mssql');
 const { Parser } = require('node-sql-parser');
 
 const router = express.Router();
 const parser = new Parser();
 
-// Store active connections (in production, use a proper connection pool)
+// Store active connections and type
 let dbConnection = null;
+let dbType = null;
+let mssqlPool = null;
 
 // Test database connection
 router.post('/connect', async (req, res) => {
   try {
-    const { host, user, password, database } = req.body;
+    const { type, host, port, user, password, database } = req.body;
 
     // Close existing connection if any
-    if (dbConnection) {
+    if (dbConnection && dbType === 'mysql') {
       await dbConnection.end();
+      dbConnection = null;
+    }
+    if (mssqlPool && dbType === 'mssql') {
+      await mssqlPool.close();
+      mssqlPool = null;
     }
 
-    // Create new connection
-    dbConnection = await mysql.createConnection({
-      host: host || 'localhost',
-      user: user,
-      password: password,
-      database: database
-    });
+    dbType = type || 'mysql';
 
-    res.json({
-      success: true,
-      message: 'Connected to database successfully'
-    });
+    if (dbType === 'mysql') {
+      // Create MySQL connection
+      dbConnection = await mysql.createConnection({
+        host: host || 'localhost',
+        port: port || 3306,
+        user: user,
+        password: password,
+        database: database
+      });
+
+      res.json({
+        success: true,
+        message: 'Connected to MySQL database successfully'
+      });
+    } else if (dbType === 'mssql') {
+      // Create SQL Server connection
+      const config = {
+        user: user,
+        password: password,
+        server: host || 'localhost',
+        port: parseInt(port) || 1433,
+        database: database,
+        options: {
+          encrypt: false, // Use true for Azure
+          trustServerCertificate: true,
+          enableArithAbort: true
+        }
+      };
+
+      mssqlPool = await mssql.connect(config);
+      dbConnection = mssqlPool; // For compatibility with existing code
+
+      res.json({
+        success: true,
+        message: 'Connected to SQL Server database successfully'
+      });
+    } else {
+      throw new Error('Unsupported database type');
+    }
+
   } catch (error) {
     console.error('Database connection error:', error);
     res.status(500).json({
@@ -49,8 +87,17 @@ router.get('/tables', async (req, res) => {
       });
     }
 
-    const [tables] = await dbConnection.query('SHOW TABLES');
-    const tableNames = tables.map(row => Object.values(row)[0]);
+    let tableNames = [];
+
+    if (dbType === 'mysql') {
+      const [tables] = await dbConnection.query('SHOW TABLES');
+      tableNames = tables.map(row => Object.values(row)[0]);
+    } else if (dbType === 'mssql') {
+      const result = await mssqlPool.request().query(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'"
+      );
+      tableNames = result.recordset.map(row => row.TABLE_NAME);
+    }
 
     res.json({
       success: true,
@@ -79,7 +126,14 @@ router.post('/statements', async (req, res) => {
 
     // Query to get SQL statements
     const query = `SELECT ${columnName} FROM ${tableName}`;
-    const [rows] = await dbConnection.query(query);
+    let rows;
+
+    if (dbType === 'mysql') {
+      [rows] = await dbConnection.query(query);
+    } else if (dbType === 'mssql') {
+      const result = await mssqlPool.request().query(query);
+      rows = result.recordset;
+    }
 
     // Extract SQL statements
     const sqlStatements = rows
@@ -119,8 +173,9 @@ router.post('/parse', async (req, res) => {
       try {
         const sql = statements[i];
 
-        // Parse the SQL statement
-        const ast = parser.astify(sql, { database: 'MySQL' });
+        // Parse the SQL statement with appropriate dialect
+        const dialect = dbType === 'mssql' ? 'Transact-SQL' : 'MySQL';
+        const ast = parser.astify(sql, { database: dialect });
 
         // Extract information based on statement type
         const statementInfo = extractStatementInfo(ast, sql);
@@ -369,9 +424,18 @@ router.post('/update-statements', async (req, res) => {
       try {
         const { id, newStatement } = update;
 
-        // Build update query with parameterized values for security
-        const query = `UPDATE ${tableName} SET ${columnName} = ? WHERE id = ?`;
-        await dbConnection.execute(query, [newStatement, id]);
+        if (dbType === 'mysql') {
+          // Build update query with parameterized values for security
+          const query = `UPDATE ${tableName} SET ${columnName} = ? WHERE id = ?`;
+          await dbConnection.execute(query, [newStatement, id]);
+        } else if (dbType === 'mssql') {
+          // SQL Server uses @param syntax
+          const query = `UPDATE ${tableName} SET ${columnName} = @newStatement WHERE id = @id`;
+          await mssqlPool.request()
+            .input('newStatement', mssql.NVarChar, newStatement)
+            .input('id', mssql.Int, id)
+            .query(query);
+        }
 
         updateCount++;
       } catch (updateError) {
@@ -412,7 +476,14 @@ router.post('/statements-with-ids', async (req, res) => {
 
     // Query to get SQL statements with IDs
     const query = `SELECT id, ${columnName} FROM ${tableName}`;
-    const [rows] = await dbConnection.query(query);
+    let rows;
+
+    if (dbType === 'mysql') {
+      [rows] = await dbConnection.query(query);
+    } else if (dbType === 'mssql') {
+      const result = await mssqlPool.request().query(query);
+      rows = result.recordset;
+    }
 
     // Extract SQL statements with IDs
     const statements = rows

@@ -51,6 +51,17 @@ function setupEventListeners() {
     applyRewriteBtn.addEventListener('click', handleApplyRewrite);
     cancelRewriteBtn.addEventListener('click', handleCancelRewrite);
 
+    // Database type change listener
+    const dbTypeSelect = document.getElementById('db-type');
+    const portInput = document.getElementById('port');
+    dbTypeSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'mysql') {
+            portInput.value = '3306';
+        } else if (e.target.value === 'mssql') {
+            portInput.value = '1433';
+        }
+    });
+
     // Tab switching
     const tabButtons = document.querySelectorAll('.tab-btn');
     tabButtons.forEach(btn => {
@@ -63,7 +74,9 @@ function setupEventListeners() {
 // Handle database connection
 async function handleConnect() {
     const credentials = {
+        type: document.getElementById('db-type').value,
         host: document.getElementById('host').value,
+        port: document.getElementById('port').value,
         user: document.getElementById('user').value,
         password: document.getElementById('password').value,
         database: document.getElementById('database').value
