@@ -34,6 +34,10 @@ const SQLRewriter = {
             return sqlStatement;
         }
 
+        // Check for trailing semicolon and remove it temporarily
+        const hasSemicolon = sqlStatement.trim().endsWith(';');
+        let workingStatement = hasSemicolon ? sqlStatement.trim().slice(0, -1) : sqlStatement;
+
         // Build WHERE clause from conditions
         const whereClause = '\nWHERE ' + tableConditions.join('\n  AND ');
 
@@ -45,16 +49,27 @@ const SQLRewriter = {
             { regex: /\bLIMIT\b/i, name: 'LIMIT' }
         ];
 
+        let result;
         for (const point of insertionPoints) {
-            const match = sqlStatement.match(point.regex);
+            const match = workingStatement.match(point.regex);
             if (match) {
                 const position = match.index;
-                return sqlStatement.slice(0, position) + whereClause + '\n' + sqlStatement.slice(position);
+                result = workingStatement.slice(0, position) + whereClause + '\n' + workingStatement.slice(position);
+                break;
             }
         }
 
         // No special clauses found, add at end
-        return sqlStatement.trimEnd() + whereClause;
+        if (!result) {
+            result = workingStatement.trimEnd() + whereClause;
+        }
+
+        // Add semicolon back if it was there
+        if (hasSemicolon) {
+            result = result.trim() + ';';
+        }
+
+        return result;
     },
 
     // Modify existing WHERE clause
@@ -63,8 +78,12 @@ const SQLRewriter = {
             return sqlStatement;
         }
 
+        // Check for trailing semicolon and remove it temporarily
+        const hasSemicolon = sqlStatement.trim().endsWith(';');
+        let workingStatement = hasSemicolon ? sqlStatement.trim().slice(0, -1) : sqlStatement;
+
         // Find WHERE clause
-        const whereMatch = sqlStatement.match(/\bWHERE\b/i);
+        const whereMatch = workingStatement.match(/\bWHERE\b/i);
         if (!whereMatch) {
             return sqlStatement;
         }
@@ -79,9 +98,9 @@ const SQLRewriter = {
             /\bLIMIT\b/i
         ];
 
-        let whereEnd = sqlStatement.length;
+        let whereEnd = workingStatement.length;
         for (const regex of endPoints) {
-            const match = sqlStatement.slice(whereStart).match(regex);
+            const match = workingStatement.slice(whereStart).match(regex);
             if (match) {
                 whereEnd = whereStart + match.index;
                 break;
@@ -89,14 +108,21 @@ const SQLRewriter = {
         }
 
         // Extract existing WHERE conditions
-        const existingWhere = sqlStatement.slice(whereStart, whereEnd).trim();
+        const existingWhere = workingStatement.slice(whereStart, whereEnd).trim();
 
         // Build new WHERE clause combining existing and new conditions
         const newConditions = tableConditions.join('\n  AND ');
         const combinedWhere = `\n  ${existingWhere}\n  AND ${newConditions}`;
 
         // Reconstruct statement
-        return sqlStatement.slice(0, whereStart) + combinedWhere + '\n' + sqlStatement.slice(whereEnd);
+        let result = workingStatement.slice(0, whereStart) + combinedWhere + '\n' + workingStatement.slice(whereEnd);
+
+        // Add semicolon back if it was there
+        if (hasSemicolon) {
+            result = result.trim() + ';';
+        }
+
+        return result;
     },
 
     // Format condition for SQL
